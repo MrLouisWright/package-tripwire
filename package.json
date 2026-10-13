@@ -1,6 +1,6 @@
 {
   "name": "package-tripwire",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Fail CI when dependency changes look suspicious: new install scripts, publisher/maintainer changes, freshly published versions, typosquats, deprecated packages, integrity swaps and git/URL deps. Diffs package-lock, pnpm and yarn lockfiles against a git ref or baseline. Text, JSON, SARIF; GitHub Action included.",
   "type": "module",
   "main": "./src/index.js",
