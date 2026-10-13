@@ -1,0 +1,61 @@
+name: 'package-tripwire'
+description: 'Fail CI when dependency changes look suspicious (install scripts, publisher changes, fresh versions, typosquats, integrity swaps)'
+author: 'Louis Wright'
+branding: { icon: 'alert-triangle', color: 'red' }
+inputs:
+  base: { description: 'Git ref to compare against (default: PR base branch, else HEAD~1). Requires fetch-depth: 0 or the base fetched', default: '' }
+  baseline: { description: 'Path to a saved baseline snapshot instead of a git ref', default: '' }
+  lockfile: { description: 'Lockfile path (default: auto-detect)', default: '' }
+  min-age: { description: 'Minimum publish age for new versions, e.g. 72h, 3d', default: '72h' }
+  fail-on: { description: 'error | warn | note | none', default: 'error' }
+  config: { description: 'Path to JSON config file', default: '' }
+  offline: { description: 'Skip npm registry lookups (true/false)', default: 'false' }
+  sarif: { description: 'Write SARIF to this path (upload with github/codeql-action/upload-sarif)', default: '' }
+  json: { description: 'Write JSON report to this path', default: '' }
+  job-summary: { description: 'Write the Markdown report to the job summary (true/false)', default: 'true' }
+  args: { description: 'Extra CLI arguments, e.g. "--no-dev"', default: '' }
+outputs:
+  markdown-file: { description: 'Path of the Markdown report', value: '${{ steps.run.outputs.markdown-file }}' }
+runs:
+  using: 'composite'
+  steps:
+    - uses: actions/setup-node@v4
+      with: { node-version: '20' }
+    - id: run
+      shell: bash
+      env:
+        PT_BASE: ${{ inputs.base }}
+        PT_PR_BASE: ${{ github.base_ref }}
+        PT_BASELINE: ${{ inputs.baseline }}
+        PT_LOCKFILE: ${{ inputs.lockfile }}
+        PT_MIN_AGE: ${{ inputs.min-age }}
+        PT_FAIL_ON: ${{ inputs.fail-on }}
+        PT_CONFIG: ${{ inputs.config }}
+        PT_OFFLINE: ${{ inputs.offline }}
+        PT_SARIF: ${{ inputs.sarif }}
+        PT_JSON: ${{ inputs.json }}
+        PT_SUMMARY: ${{ inputs.job-summary }}
+        PT_ARGS: ${{ inputs.args }}
+        FORCE_COLOR: '1'
+      run: |
+        md="$RUNNER_TEMP/package-tripwire.md"
+        args=(--fail-on "$PT_FAIL_ON" --min-age "$PT_MIN_AGE" --markdown "$md")
+        if [ -n "$PT_BASELINE" ]; then args+=(--baseline "$PT_BASELINE")
+        elif [ -n "$PT_BASE" ]; then args+=(--base "$PT_BASE")
+        elif [ -n "$PT_PR_BASE" ]; then
+          git fetch --no-tags --depth=1 origin "$PT_PR_BASE" >/dev/null 2>&1 || true
+          args+=(--base "origin/$PT_PR_BASE")
+        else args+=(--base "HEAD~1"); fi
+        [ -n "$PT_LOCKFILE" ] && args+=(--lockfile "$PT_LOCKFILE")
+        [ -n "$PT_CONFIG" ] && args+=(--config "$PT_CONFIG")
+        [ "$PT_OFFLINE" = "true" ] && args+=(--offline)
+        [ -n "$PT_SARIF" ] && args+=(--sarif "$PT_SARIF")
+        [ -n "$PT_JSON" ] && args+=(--json "$PT_JSON")
+        set +e
+        # shellcheck disable=SC2086
+        node "${{ github.action_path }}/bin/package-tripwire.js" "${args[@]}" $PT_ARGS
+        code=$?
+        set -e
+        echo "markdown-file=$md" >> "$GITHUB_OUTPUT"
+        if [ "$PT_SUMMARY" = "true" ] && [ -f "$md" ]; then cat "$md" >> "$GITHUB_STEP_SUMMARY"; fi
+        exit $code
