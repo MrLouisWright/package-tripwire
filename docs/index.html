@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>package-tripwire · Fail CI when dependency changes look suspicious.</title>
+<meta name="description" content="Fail CI when dependency changes look suspicious. Diffs your lockfile against a git ref or a saved baseline, looks up every new or changed package in the npm registry, and fails the build when something looks like a supply-chain attack: new install scripts, typosquats, publisher changes, lost provena">
+<meta name="theme-color" content="#07090c">
+<link rel="canonical" href="https://mrlouiswright.github.io/package-tripwire/">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<meta property="og:type" content="website">
+<meta property="og:title" content="package-tripwire: Fail CI when dependency changes look suspicious.">
+<meta property="og:description" content="Fail CI when dependency changes look suspicious. Diffs your lockfile against a git ref or a saved baseline, looks up every new or changed package in the npm registry, and fails the build when something looks like a supply-chain attack: new install scripts, typosquats, publisher changes, lost provena">
+<meta property="og:url" content="https://mrlouiswright.github.io/package-tripwire/">
+<meta property="og:image" content="https://mrlouiswright.github.io/package-tripwire/og.png">
+<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="package-tripwire: Fail CI when dependency changes look suspicious.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="package-tripwire">
+<meta name="twitter:description" content="Fail CI when dependency changes look suspicious.">
+<meta name="twitter:image" content="https://mrlouiswright.github.io/package-tripwire/og.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="style.css">
+<style>:root{--accent:#fb923c;--accent-2:#c2410c}</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="nav">
+  <div class="wrap nav-in">
+    <a class="brand" href="./"><span class="brand-g" aria-hidden="true">P</span>package-tripwire</a>
+    <nav aria-label="Primary"><ul>
+      <li><a href="#features">Features</a></li><li><a href="#usage">Usage</a></li><li><a href="#ci">CI</a></li><li><a href="#options">Options</a></li>
+      <li><a class="gh" href="https://github.com/MrLouisWright/package-tripwire">GitHub</a></li>
+    </ul></nav>
+  </div>
+</header>
+<main id="main">
+<section class="hero">
+  <div class="wrap hero-grid">
+    <div class="hero-copy">
+      <p class="eyebrow"><span class="dot" aria-hidden="true"></span> npm package · MIT · Node ≥ 18</p>
+      <h1>package-tripwire</h1>
+      <p class="tagline">Fail CI when dependency changes look suspicious.</p>
+      <p class="lede">Diffs your lockfile against a git ref or a saved baseline, looks up every new or changed package in the npm registry, and fails the build when something looks like a supply-chain attack: new install scripts, typosquats, publisher changes, lost provenance, bad signatures and more. Supports npm, pnpm and yarn (classic and Berry) lockfiles. Zero runtime dependencies.</p>
+      <div class="install">
+        <code id="install-cmd"><span class="prompt" aria-hidden="true">$</span> npm i -D package-tripwire</code>
+        <button class="copy" type="button" data-copy="npm i -D package-tripwire" aria-label="Copy install command">Copy</button>
+        <span class="sr-only" role="status" aria-live="polite" id="copy-status"></span>
+      </div>
+      <div class="ctas">
+        <a class="btn primary" href="https://github.com/MrLouisWright/package-tripwire#readme">Read the docs</a>
+        <a class="btn" href="https://www.npmjs.com/package/package-tripwire">View on npm</a>
+        <a class="btn" href="https://github.com/MrLouisWright/package-tripwire">Source on GitHub</a>
+      </div>
+      <div class="badges">
+        <a href="https://www.npmjs.com/package/package-tripwire"><img src="https://img.shields.io/npm/v/package-tripwire.svg?style=flat-square&amp;color=111" alt="npm version of package-tripwire" height="20"></a>
+        <a href="https://github.com/MrLouisWright/package-tripwire/actions/workflows/ci.yml"><img src="https://github.com/MrLouisWright/package-tripwire/actions/workflows/ci.yml/badge.svg" alt="CI status" height="20"></a>
+        <a href="https://github.com/MrLouisWright/package-tripwire/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="License: MIT" height="20"></a>
+        <a href="https://github.com/MrLouisWright/package-tripwire"><img src="https://img.shields.io/github/stars/MrLouisWright/package-tripwire?style=flat-square" alt="GitHub stars for package-tripwire" height="20"></a>
+      </div>
+    </div>
+    <figure class="term" aria-label="Example terminal session running package-tripwire">
+      <div class="term-bar"><span></span><span></span><span></span><em>~/project — zsh</em></div>
+      <pre class="term-body" data-cmd="npx package-tripwire --base origin/main"><span class="ln cmd"><span class="prompt">$</span> <span class="typed">npx package-tripwire --base origin/main</span><span class="caret" aria-hidden="true"></span></span><span class="out"><span class="ln b">package-tripwire — 2 → 6 packages (4 added, 1 updated, 0 removed)</span><span class="ln e">  ERROR [install-script] esbuild@0.24.0 runs install scripts → postinstall: node install.js</span><span class="ln e">  ERROR [typosquat] expresss looks like a typosquat: edit distance 1 from &quot;express&quot;</span><span class="ln w">  WARN  [maintainer-change] debug@4.4.3 maintainers changed -thebigredgeek,-tjholowaychuk</span><span class="ln w">  WARN  [unknown-package] expresss@0.0.1 not found in registry</span><span class="ln w">  WARN  [deprecated] request@2.88.2 is deprecated</span><span class="ln i">  NOTE  [new-dependency] esbuild@0.24.0 added</span><span class="ln dim">&nbsp;</span><span class="ln b">2 error(s), 4 warning(s), 4 note(s).</span><span class="ln e">✖ Failing (fail-on: error).</span></span></pre>
+      <figcaption class="sr-only">Sample output adapted from the package-tripwire README.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="sec" id="problem">
+  <div class="wrap narrow">
+    <h2><span class="h-idx">01</span> The problem</h2>
+    <p class="big">Supply-chain attacks arrive as a one-line lockfile change: a typosquatted name, a fresh postinstall script, a version published an hour ago by a new maintainer. In a big PR diff, nobody reads pnpm-lock.yaml.</p>
+    <p class="big">package-tripwire reads it for you. It only queries the registry for added or changed packages, so it stays fast, and it fails the PR with a clear reason.</p>
+  </div>
+</section>
+
+<section class="sec" id="features">
+  <div class="wrap">
+    <h2><span class="h-idx">02</span> Features</h2>
+    <div class="grid">
+      <article class="card"><span class="card-i" aria-hidden="true">01</span><h3>Install-script detection</h3><p>New or changed preinstall / install / postinstall scripts, plus optional allowScripts enforcement in the style of @lavamoat/allow-scripts.</p></article>
+      <article class="card"><span class="card-i" aria-hidden="true">02</span><h3>Typosquat heuristics</h3><p>Edit distance, -/_/. confusion, homoglyphs, scoped copies and -js / node- affixes against popular package names.</p></article>
+      <article class="card"><span class="card-i" aria-hidden="true">03</span><h3>Publisher &amp; maintainer changes</h3><p>Flags versions published by a different npm user, and maintainer list changes.</p></article>
+      <article class="card"><span class="card-i" aria-hidden="true">04</span><h3>Minimum publish age</h3><p>Fail on versions younger than --min-age (default 72h).</p></article>
+      <article class="card"><span class="card-i" aria-hidden="true">05</span><h3>Signatures &amp; provenance</h3><p>Verifies registry tarball signatures and flags lost provenance attestations.</p></article>
+      <article class="card"><span class="card-i" aria-hidden="true">06</span><h3>Integrity changes</h3><p>Same name@version with a different hash or tarball source, plus opt-in lockfile-lint style URL policy.</p></article>
+      <article class="card"><span class="card-i" aria-hidden="true">07</span><h3>Every lockfile</h3><p>package-lock / shrinkwrap v1–v3, pnpm-lock v5–v9, yarn.lock classic and Berry.</p></article>
+      <article class="card"><span class="card-i" aria-hidden="true">08</span><h3>Reports for CI</h3><p>JSON, SARIF and Markdown; CLI, library and GitHub Action.</p></article>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="usage">
+  <div class="wrap">
+    <h2><span class="h-idx">03</span> Usage</h2>
+    <div class="usage">
+      <div class="u"><p class="u-t"># Compare against HEAD</p><pre><code><span class="prompt" aria-hidden="true">$</span> npx package-tripwire</code></pre></div>
+      <div class="u"><p class="u-t"># Compare against the PR base</p><pre><code><span class="prompt" aria-hidden="true">$</span> npx package-tripwire --base origin/main</code></pre></div>
+      <div class="u"><p class="u-t"># Snapshot a baseline</p><pre><code><span class="prompt" aria-hidden="true">$</span> npx package-tripwire --save-baseline .tripwire/baseline.json</code></pre></div>
+      <div class="u"><p class="u-t"># Stricter gate with reports</p><pre><code><span class="prompt" aria-hidden="true">$</span> npx package-tripwire --min-age 7d --fail-on warn --sarif tripwire.sarif --json tripwire.json</code></pre></div>
+    </div>
+
+  </div>
+</section>
+
+<section class="sec" id="ci">
+  <div class="wrap">
+    <h2><span class="h-idx">04</span> CI / GitHub Action</h2>
+    <pre class="code yaml"><code>name: Dependency tripwire
+on: pull_request
+permissions:
+  contents: read
+  security-events: write   # only needed for SARIF upload
+jobs:
+  tripwire:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: MrLouisWright/package-tripwire@v1
+        with:
+          min-age: 72h
+          fail-on: error
+          sarif: tripwire.sarif
+      - if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with: { sarif_file: tripwire.sarif }</code></pre>
+  </div>
+</section>
+
+<section class="sec" id="options">
+  <div class="wrap">
+    <h2><span class="h-idx">05</span> Options &amp; flags</h2>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th scope="col">Flag</th><th scope="col">Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>--base &lt;ref&gt;</code></td><td>Git ref to compare against (default HEAD)</td></tr>
+        <tr><td><code>--baseline &lt;file&gt;</code></td><td>Compare against a saved baseline (or any lockfile) instead of git</td></tr>
+        <tr><td><code>--save-baseline &lt;file&gt;</code></td><td>Write a baseline snapshot of the current lockfile and exit</td></tr>
+        <tr><td><code>--lockfile &lt;path&gt;</code></td><td>Lockfile to check (auto-detected by default)</td></tr>
+        <tr><td><code>--min-age &lt;dur&gt;</code></td><td>Minimum publish age: 90m, 72h, 3d, 1w, 0</td></tr>
+        <tr><td><code>--offline</code></td><td>No registry lookups</td></tr>
+        <tr><td><code>--registry &lt;url&gt;</code></td><td>Registry URL (default https://registry.npmjs.org)</td></tr>
+        <tr><td><code>--no-dev</code></td><td>Ignore dev dependencies</td></tr>
+        <tr><td><code>--no-signatures</code></td><td>Skip registry tarball signature verification</td></tr>
+        <tr><td><code>--require-provenance</code></td><td>Treat missing provenance attestations as findings</td></tr>
+        <tr><td><code>--enforce-allow-scripts</code></td><td>Fail when install scripts run outside allowScripts</td></tr>
+        <tr><td><code>--write-allow-scripts &lt;file&gt;</code></td><td>Write the configured allowScripts list to a JSON policy file</td></tr>
+        <tr><td><code>--config &lt;file&gt;</code></td><td>Config file path</td></tr>
+        <tr><td><code>--fail-on &lt;level&gt;</code></td><td>error (default), warn, note or none</td></tr>
+        <tr><td><code>--json [file]</code></td><td>JSON report to a file, or stdout</td></tr>
+        <tr><td><code>--sarif &lt;file&gt;</code></td><td>SARIF 2.1.0 report for GitHub code scanning</td></tr>
+        <tr><td><code>--markdown &lt;file&gt;</code></td><td>Markdown report for PR comments and job summaries</td></tr>
+        <tr><td><code>--quiet, --no-color</code></td><td>Output tweaks</td></tr>
+      </tbody>
+    </table></div>
+    <p class="note">Full reference, config file format and API in the <a href="https://github.com/MrLouisWright/package-tripwire#readme">README</a>.</p>
+  </div>
+</section>
+
+<section class="sec more" id="more">
+  <div class="wrap">
+    <h2><span class="h-idx">06</span> More tools by Louis Wright</h2>
+    <div class="tools">
+<a class="tool" href="https://mrlouiswright.github.io/bundle-secret-guard/" style="--a:#f43f5e"><span class="tool-g" aria-hidden="true">S</span><span><strong>bundle-secret-guard</strong><small>Fail the build when secrets ship to the browser.</small></span></a>
+<a class="tool" href="https://mrlouiswright.github.io/cookie-sentinel/" style="--a:#fbbf24"><span class="tool-g" aria-hidden="true">K</span><span><strong>cookie-sentinel</strong><small>Audit the cookies your site sets before attackers do.</small></span></a>
+<a class="tool" href="https://mrlouiswright.github.io/csp-forge/" style="--a:#f59e0b"><span class="tool-g" aria-hidden="true">C</span><span><strong>csp-forge</strong><small>Generate a tight Content-Security-Policy from your built site.</small></span></a>
+<a class="tool" href="https://mrlouiswright.github.io/form-honeypot-guard/" style="--a:#a3e635"><span class="tool-g" aria-hidden="true">F</span><span><strong>form-honeypot-guard</strong><small>Block form spam bots without a captcha.</small></span></a>
+<a class="tool" href="https://mrlouiswright.github.io/header-sentinel/" style="--a:#22d3ee"><span class="tool-g" aria-hidden="true">H</span><span><strong>header-sentinel</strong><small>Fail CI when deployed URLs ship weak HTTP security headers.</small></span></a>
+<a class="tool" href="https://mrlouiswright.github.io/license-sentinel/" style="--a:#60a5fa"><span class="tool-g" aria-hidden="true">⚖</span><span><strong>license-sentinel</strong><small>A license compliance gate for npm projects, plus CycloneDX/SPDX SBOMs and a NOTICES file.</small></span></a>
+<a class="tool" href="https://mrlouiswright.github.io/sri-sentinel/" style="--a:#34d399"><span class="tool-g" aria-hidden="true">I</span><span><strong>sri-sentinel</strong><small>Subresource Integrity for your built site: generate, write and check it in CI.</small></span></a>
+<a class="tool" href="https://mrlouiswright.github.io/static-link-sentinel/" style="--a:#a78bfa"><span class="tool-g" aria-hidden="true">L</span><span><strong>static-link-sentinel</strong><small>Fail CI on broken links before you deploy.</small></span></a>
+<a class="tool" href="https://mrlouiswright.github.io/workflow-sentinel/" style="--a:#2dd4bf"><span class="tool-g" aria-hidden="true">W</span><span><strong>workflow-sentinel</strong><small>Catch insecure GitHub Actions workflows before they're merged.</small></span></a>
+    </div>
+  </div>
+</section>
+</main>
+<footer class="foot">
+  <div class="wrap foot-in">
+    <p>MIT © <a href="https://github.com/MrLouisWright">Louis Wright</a></p>
+    <p><a href="https://github.com/MrLouisWright/package-tripwire">GitHub</a> · <a href="https://www.npmjs.com/package/package-tripwire">npm</a> · <a href="https://github.com/MrLouisWright/package-tripwire#readme">README</a></p>
+  </div>
+</footer>
+<script src="app.js" defer></script>
+</body>
+</html>
