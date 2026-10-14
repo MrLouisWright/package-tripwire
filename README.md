@@ -195,6 +195,10 @@ TypeScript declarations are generated from source into `dist/` when you run `npm
 - Signature verification depends on registry signing keys and `dist.signatures` metadata (private registries must expose the same `/-/npm/v1/keys` convention as the public npm registry).
 - `enforceAllowScripts` blocks disallowed packages at scan time; combine with your package manager's lifecycle hooks if you need install-time enforcement like LavaMoat.
 
+## Support
+
+If this project is useful to you, you can support its development with a donation: [Buy me a coffee](https://donate.stripe.com/aFa00lek3cvX4Ds2Fk9EI0b). It helps keep these tools maintained, documented and free for everyone.
+
 ## License
 
-MIT © Louis Wright
+MIT © Louis Wright ([Louis Wright](https://github.com/MrLouisWright))
