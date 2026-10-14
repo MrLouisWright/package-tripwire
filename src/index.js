@@ -9,9 +9,12 @@ import { loadConfig } from './config.js';
 export { analyze } from './analyze.js';
 export { parseLockfile, parseAny, detectLockfile, toBaseline, classifySource } from './lockfile.js';
 export { createRegistry } from './registry.js';
-export { loadConfig, parseDuration, isAllowed, RULES } from './config.js';
+export { loadConfig, parseDuration, isAllowed, RULES, LOCKFILE_LINT_DEFAULTS } from './config.js';
 export { typosquatOf, levenshtein, POPULAR } from './typosquat.js';
 export { formatText, formatJson, formatSarif, formatMarkdown, exitCode } from './format.js';
+export { fetchSigningKeys, hasProvenance, verifyDistSignature } from './signatures.js';
+export { lintLockfile, lintResolvedEntry, nameUrlMismatch } from './lockfileLint.js';
+export { findDisallowedInstallScripts, isScriptAllowed, allowScriptsPolicy, installScriptsFromMeta } from './allowScripts.js';
 
 /** Read a file as it existed at a git ref. Returns null if it did not exist there. */
 export function readAtRef(ref, file, cwd = '.') {

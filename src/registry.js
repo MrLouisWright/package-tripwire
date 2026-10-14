@@ -1,6 +1,7 @@
 // npm registry metadata client with in-memory + optional disk cache. Zero dependencies (global fetch, Node 18+).
 import fs from 'node:fs';
 import path from 'node:path';
+import { fetchSigningKeys } from './signatures.js';
 
 export function createRegistry({ registry = 'https://registry.npmjs.org', token, fetchImpl = globalThis.fetch, cacheDir, timeoutMs = 15000, retries = 2 } = {}) {
   const mem = new Map();
@@ -30,7 +31,11 @@ export function createRegistry({ registry = 'https://registry.npmjs.org', token,
     mem.set(name, p);
     return p;
   }
-  return { packument };
+  const keyCache = {};
+  return {
+    packument,
+    signingKeys: () => fetchSigningKeys({ registry: base, fetchImpl, timeoutMs, cache: keyCache }),
+  };
 }
 
 export async function mapLimit(items, limit, fn) {

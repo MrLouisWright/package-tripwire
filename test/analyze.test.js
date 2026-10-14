@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { analyze, parseAny, typosquatOf, isAllowed, parseDuration, formatSarif, formatText, formatMarkdown, exitCode } from '../src/index.js';
 import { lock, mockRegistry, NOW } from './helpers.js';
 
+const OFFLINE_REG = { verifySignatures: false };
+
 const BASE = parseAny(lock([
   { name: 'left-pad', version: '1.0.0' },
   { name: 'safe-lib', version: '2.0.0' },
@@ -22,7 +24,7 @@ const HEAD = parseAny(lock([
 const rulesFor = (r, pkg) => r.findings.filter((f) => f.package === pkg).map((f) => f.rule).sort();
 
 test('flags every suspicious class', async () => {
-  const r = await analyze(BASE, HEAD, { registry: mockRegistry(), now: NOW });
+  const r = await analyze(BASE, HEAD, { registry: mockRegistry(), now: NOW, config: OFFLINE_REG });
   assert.deepEqual(rulesFor(r, 'left-pad'), ['install-script', 'maintainer-change', 'publisher-change', 'recent-publish']);
   assert.deepEqual(rulesFor(r, 'safe-lib'), []);
   assert.deepEqual(rulesFor(r, 'swapped'), ['integrity-change']);
@@ -39,19 +41,20 @@ test('flags every suspicious class', async () => {
 
 test('registry is only queried for added/changed registry packages', async () => {
   const reg = mockRegistry();
-  await analyze(BASE, HEAD, { registry: reg, now: NOW });
+  await analyze(BASE, HEAD, { registry: reg, now: NOW, config: OFFLINE_REG });
   assert.deepEqual(reg.calls.sort(), ['esbuild', 'expresss', 'left-pad', 'request', 'safe-lib']);
 });
 
 test('min-age is configurable', async () => {
-  const r = await analyze(BASE, HEAD, { registry: mockRegistry(), now: NOW, config: { minAge: '1h' } });
+  const r = await analyze(BASE, HEAD, { registry: mockRegistry(), now: NOW, config: { ...OFFLINE_REG, minAge: '1h' } });
   assert.ok(!r.findings.some((f) => f.rule === 'recent-publish'));
-  const r2 = await analyze(BASE, HEAD, { registry: mockRegistry(), now: NOW, config: { minAge: '45d' } });
+  const r2 = await analyze(BASE, HEAD, { registry: mockRegistry(), now: NOW, config: { ...OFFLINE_REG, minAge: '45d' } });
   assert.ok(r2.findings.some((f) => f.rule === 'recent-publish' && f.package === 'safe-lib'));
 });
 
 test('allowlist and rule overrides', async () => {
   const r = await analyze(BASE, HEAD, { registry: mockRegistry(), now: NOW, config: {
+    ...OFFLINE_REG,
     allow: ['esbuild', { package: 'left-pad', version: '1.1.0', rules: ['recent-publish'] }, { package: 'swapped', expires: '2020-01-01' }],
     rules: { 'new-dependency': 'off', deprecated: 'error' },
   } });
@@ -74,7 +77,7 @@ test('offline mode still catches lockfile-only signals', async () => {
 test('lockfile integrity that disagrees with the registry', async () => {
   const b = parseAny(lock([]));
   const h = parseAny(lock([{ name: 'swapped', version: '1.0.0', integrity: 'sha512-LOCAL' }]));
-  const r = await analyze(b, h, { registry: mockRegistry(), now: NOW });
+  const r = await analyze(b, h, { registry: mockRegistry(), now: NOW, config: OFFLINE_REG });
   assert.ok(rulesFor(r, 'swapped').includes('integrity-change'));
 });
 
@@ -87,7 +90,7 @@ test('unknown packages and registry errors are reported, not thrown', async () =
 });
 
 test('no changes → clean', async () => {
-  const r = await analyze(BASE, BASE, { registry: mockRegistry(), now: NOW });
+  const r = await analyze(BASE, BASE, { registry: mockRegistry(), now: NOW, config: OFFLINE_REG });
   assert.equal(r.findings.length, 0);
   assert.equal(exitCode(r), 0);
   assert.match(formatText(r), /No suspicious/);
@@ -117,7 +120,7 @@ test('durations and allow matching', () => {
 });
 
 test('SARIF and Markdown output', async () => {
-  const r = await analyze(BASE, HEAD, { registry: mockRegistry(), now: NOW });
+  const r = await analyze(BASE, HEAD, { registry: mockRegistry(), now: NOW, config: OFFLINE_REG });
   const s = JSON.parse(formatSarif(r, { version: '1.0.0' }));
   assert.equal(s.version, '2.1.0');
   assert.equal(s.runs[0].results.length, r.findings.length);
