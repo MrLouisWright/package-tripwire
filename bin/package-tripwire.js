@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
+import path from 'node:path';
 import { readFileSync } from 'node:fs';
-import { run, saveBaseline, formatText, formatJson, formatSarif, formatMarkdown, exitCode, parseAny, detectLockfile } from '../src/index.js';
+import { run, saveBaseline, formatText, formatJson, formatSarif, formatMarkdown, exitCode, parseAny, detectLockfile, loadConfig, allowScriptsPolicy } from '../dist/index.js';
 
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 
@@ -20,6 +21,10 @@ Rules:
   --offline               Skip registry lookups (lockfile-only checks)
   --registry <url>        npm registry URL (default: https://registry.npmjs.org)
   --no-dev                Ignore devDependencies
+  --no-signatures         Skip registry tarball signature verification
+  --require-provenance    Fail when resolved versions lack provenance attestations
+  --enforce-allow-scripts Require every install-script package to appear in allowScripts
+  --write-allow-scripts <file>  Write allowScripts policy JSON from config and exit 0
   --config <file>         Config file (default: .package-tripwire.json or package.json "package-tripwire")
   --fail-on <level>       error | warn | note | none (default: error)
 
@@ -50,6 +55,10 @@ function parseArgs(argv) {
       case '--registry': o.cfg.registry = val(i); i++; break;
       case '--offline': o.offline = true; break;
       case '--no-dev': o.cfg.includeDev = false; break;
+      case '--no-signatures': o.cfg.verifySignatures = false; break;
+      case '--require-provenance': o.cfg.requireProvenance = true; break;
+      case '--enforce-allow-scripts': o.cfg.enforceAllowScripts = true; break;
+      case '--write-allow-scripts': o.writeAllowScripts = val(i); i++; break;
       case '--config': o.config = val(i); i++; break;
       case '--fail-on': o.failOn = val(i); i++; if (!['error', 'warn', 'note', 'none'].includes(o.failOn)) throw new Error(`Invalid --fail-on ${o.failOn}`); break;
       case '--json': { const n = argv[i + 1]; if (n && !n.startsWith('--')) { o.json = n; i++; } else o.json = '-'; break; }
@@ -74,6 +83,14 @@ async function main() {
     const map = parseAny(fs.readFileSync(lf, 'utf8'), lf);
     saveBaseline(o.saveBaseline, map, { lockfile: lf });
     process.stdout.write(`Saved baseline of ${map.size} packages from ${lf} to ${o.saveBaseline}\n`);
+    return 0;
+  }
+  if (o.writeAllowScripts) {
+    const cfg = { ...loadConfig('.', o.config), ...o.cfg };
+    if (!cfg.allowScripts?.length) throw new Error('--write-allow-scripts requires allowScripts in config');
+    fs.mkdirSync(path.dirname(path.resolve(o.writeAllowScripts)), { recursive: true });
+    fs.writeFileSync(o.writeAllowScripts, JSON.stringify(allowScriptsPolicy(cfg.allowScripts), null, 2) + '\n');
+    process.stdout.write(`Wrote allowScripts policy (${cfg.allowScripts.length} entries) to ${o.writeAllowScripts}\n`);
     return 0;
   }
   const res = await run({ lockfile: o.lockfile, base: o.base, baseline: o.baseline, configPath: o.config, offline: o.offline, config: o.cfg });

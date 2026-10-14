@@ -1,15 +1,11 @@
 import { RULES, isAllowed, parseDuration } from './config.js';
 import { typosquatOf, POPULAR } from './typosquat.js';
 import { mapLimit } from './registry.js';
+import { hasProvenance, verifyDistSignature } from './signatures.js';
+import { lintLockfile } from './lockfileLint.js';
+import { findDisallowedInstallScripts, installScriptsFromMeta as installScripts } from './allowScripts.js';
 
 const HOOKS = ['preinstall', 'install', 'postinstall'];
-
-function installScripts(v) {
-  const s = {};
-  for (const h of HOOKS) if (v?.scripts?.[h]) s[h] = v.scripts[h];
-  if (!s.install && v?.gypfile) s.install = 'node-gyp rebuild (implicit, binding.gyp)';
-  return s;
-}
 
 const names = (arr) => (arr || []).map((m) => (typeof m === 'string' ? m.replace(/\s*<.*$/, '') : m.name)).filter(Boolean).sort();
 
@@ -45,6 +41,34 @@ export async function analyze(base, head, { registry, config = {}, now = Date.no
   const baseByName = new Map();
   for (const e of base.values()) { if (!baseByName.has(e.name)) baseByName.set(e.name, []); baseByName.get(e.name).push(e); }
 
+  if (config.lockfileLint && config.lockfileLint !== false) {
+    for (const lf of lintLockfile(head, config.lockfileLint)) {
+      const ent = head.get(`${lf.package}@${lf.version}`);
+      if (ent && !keep(ent)) continue;
+      push({ rule: lf.rule, package: lf.package, version: lf.version, message: lf.message, details: lf.details || {} });
+    }
+  }
+
+  if (config.enforceAllowScripts && config.allowScripts?.length) {
+    const bad = await findDisallowedInstallScripts(head, {
+      allowScripts: config.allowScripts,
+      registry: registry || null,
+      includeDev: config.includeDev !== false,
+      concurrency: config.concurrency || 8,
+    });
+    for (const b of bad) {
+      const what = Object.entries(b.scripts).map(([k, v]) => `${k}: ${v}`).join('; ');
+      push({ rule: 'disallowed-install-script', package: b.name, version: b.version, message: `${b.name}@${b.version} runs install scripts but is not in allowScripts → ${what}`, details: { scripts: b.scripts } });
+    }
+  }
+
+  let signingKeys = null;
+  if (registry && config.verifySignatures !== false && typeof registry.signingKeys === 'function') {
+    try { signingKeys = await registry.signingKeys(); } catch (e) {
+      push({ rule: 'registry-error', package: '(registry)', version: '', message: `Could not fetch registry signing keys: ${e.message}`, details: {} });
+    }
+  }
+
   // Same name@version present on both sides: integrity / resolved must not change.
   for (const [key, h] of head) {
     const b = base.get(key);
@@ -79,8 +103,20 @@ export async function analyze(base, head, { registry, config = {}, now = Date.no
   }
 
   if (registry) {
-    const regTargets = changed.filter(({ h }) => h.source === 'registry');
-    await mapLimit(regTargets, config.concurrency || 8, async ({ h, prev }) => {
+    const regTargets = new Map();
+    for (const { h, prev } of changed) if (h.source === 'registry') regTargets.set(`${h.name}@${h.version}`, { h, prev });
+    if (config.verifySignatures !== false) {
+      for (const h of head.values()) {
+        if (!keep(h) || h.source !== 'registry') continue;
+        const key = `${h.name}@${h.version}`;
+        if (!regTargets.has(key)) {
+          const prevs = (baseByName.get(h.name) || []).slice().sort((a, b) => cmpVer(b.version, a.version));
+          const prev = prevs.find((p) => !head.has(`${p.name}@${p.version}`)) || prevs[0] || null;
+          regTargets.set(key, { h, prev: prev && prev.source === 'registry' ? prev : null });
+        }
+      }
+    }
+    await mapLimit([...regTargets.values()], config.concurrency || 8, async ({ h, prev }) => {
       const id = `${h.name}@${h.version}`;
       let pack;
       try { pack = await registry.packument(h.name); } catch (e) {
@@ -123,6 +159,21 @@ export async function analyze(base, head, { registry, config = {}, now = Date.no
       const ri = v.dist?.integrity;
       if (ri && h.integrity && !h.integrity.startsWith('yarn-checksum:') && !h.integrity.split(/\s+/).includes(ri) && h.integrity.split('-')[0] === ri.split('-')[0])
         push({ rule: 'integrity-change', package: h.name, version: h.version, message: `${id}: lockfile integrity ${short(h.integrity)} does not match registry ${short(ri)}`, details: { lockfile: h.integrity, registry: ri } });
+
+      if (signingKeys && v.dist) {
+        const sigStatus = verifyDistSignature(h.name, h.version, v.dist, signingKeys, now);
+        if (sigStatus === 'invalid')
+          push({ rule: 'registry-signature-invalid', package: h.name, version: h.version, message: `${id}: registry tarball signature is invalid`, details: { signatures: v.dist.signatures } });
+        else if (sigStatus === 'missing' && signingKeys.length)
+          push({ rule: 'unsigned-package', package: h.name, version: h.version, message: `${id}: registry metadata has no tarball signature`, details: {} });
+      }
+
+      const nowProv = hasProvenance(v);
+      const wasProv = pv ? hasProvenance(pv) : false;
+      if (pv && wasProv && !nowProv)
+        push({ rule: 'provenance-lost', package: h.name, version: h.version, previousVersion: prev.version, message: `${id} lost npm provenance attestation (previous ${prev.version} had provenance)`, details: {} });
+      else if (config.requireProvenance && !nowProv)
+        push({ rule: 'provenance-missing', package: h.name, version: h.version, previousVersion: prev?.version, message: `${id} has no provenance attestation`, details: {} });
     });
   }
 

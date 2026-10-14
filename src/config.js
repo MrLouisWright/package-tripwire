@@ -3,7 +3,15 @@ import path from 'node:path';
 
 export const RULES = {
   'install-script': { level: 'error', title: 'New or changed install script' },
+  'disallowed-install-script': { level: 'error', title: 'Install script not on allowScripts list' },
   'integrity-change': { level: 'error', title: 'Tarball/integrity changed for the same version' },
+  'registry-signature-invalid': { level: 'error', title: 'Registry tarball signature is invalid' },
+  'unsigned-package': { level: 'warn', title: 'Registry package is missing a signature' },
+  'provenance-lost': { level: 'error', title: 'Provenance attestation disappeared between versions' },
+  'provenance-missing': { level: 'note', title: 'Version has no provenance attestation' },
+  'disallowed-host': { level: 'error', title: 'Resolved tarball host is not allowed' },
+  'disallowed-scheme': { level: 'error', title: 'Resolved tarball URL scheme is not allowed' },
+  'name-url-mismatch': { level: 'error', title: 'Package name does not match resolved tarball URL' },
   'typosquat': { level: 'error', title: 'Name resembles a popular package' },
   'publisher-change': { level: 'error', title: 'Version published by a different npm user' },
   'recent-publish': { level: 'error', title: 'Version published very recently' },
@@ -17,8 +25,26 @@ export const RULES = {
 
 export const CONFIG_FILES = ['.package-tripwire.json', '.package-tripwirerc.json', '.package-tripwirerc'];
 
+export const LOCKFILE_LINT_DEFAULTS = {
+  allowedHosts: ['registry.npmjs.org', 'registry.yarnpkg.com', 'npm.pkg.github.com'],
+  allowedSchemes: ['https:'],
+  validatePackageNames: true,
+};
+
 export const DEFAULTS = {
-  minAge: '72h', registry: 'https://registry.npmjs.org', failOn: 'error', rules: {}, allow: [], popular: [], includeDev: true, concurrency: 8,
+  minAge: '72h',
+  registry: 'https://registry.npmjs.org',
+  failOn: 'error',
+  rules: {},
+  allow: [],
+  popular: [],
+  includeDev: true,
+  concurrency: 8,
+  verifySignatures: true,
+  requireProvenance: false,
+  lockfileLint: false,
+  allowScripts: [],
+  enforceAllowScripts: false,
 };
 
 export function loadConfig(dir = '.', explicit) {
@@ -32,7 +58,12 @@ export function loadConfig(dir = '.', explicit) {
       if (fs.existsSync(pj)) { try { cfg = JSON.parse(fs.readFileSync(pj, 'utf8'))['package-tripwire'] || {}; } catch { /* ignore */ } }
     }
   }
-  return { ...DEFAULTS, ...cfg, rules: { ...(cfg.rules || {}) } };
+  return {
+    ...DEFAULTS,
+    ...cfg,
+    rules: { ...DEFAULTS.rules, ...(cfg.rules || {}) },
+    lockfileLint: cfg.lockfileLint === false || !cfg.lockfileLint ? false : { ...LOCKFILE_LINT_DEFAULTS, ...cfg.lockfileLint },
+  };
 }
 
 /** Parse "72h", "3d", "90m", "1w" or a number of hours into milliseconds. */

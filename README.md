@@ -1,17 +1,30 @@
 # package-tripwire
 
+[![CI](https://github.com/MrLouisWright/package-tripwire/actions/workflows/ci.yml/badge.svg)](https://github.com/MrLouisWright/package-tripwire/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/package-tripwire.svg)](https://www.npmjs.com/package/package-tripwire)
+[![license: MIT](https://img.shields.io/npm/l/package-tripwire.svg)](https://github.com/MrLouisWright/package-tripwire/blob/main/LICENSE)
+[![Node](https://img.shields.io/node/v/package-tripwire)](https://nodejs.org/)
+
 > Fail CI when dependency changes look suspicious.
 
-`package-tripwire` diffs your lockfile against a git ref (e.g. the PR base branch) or a saved baseline, looks up every new or changed package in the npm registry, and fails the build when something looks like a supply-chain attack. It works as a CLI, a library and a GitHub Action, and has zero dependencies.
+`package-tripwire` diffs your lockfile against a git ref (e.g. the PR base branch) or a saved baseline, looks up every new or changed package in the npm registry, and fails the build when something looks like a supply-chain attack. It works as a CLI, a library and a GitHub Action, and has **zero runtime dependencies**.
 
 Supported lockfiles: `package-lock.json` / `npm-shrinkwrap.json` (v1–v3), `pnpm-lock.yaml` (v5–v9), `yarn.lock` (classic v1 and Berry).
+
+Tests live under [`test/`](test/) and run in GitHub Actions on Node 18, 20 and 22 (including ESM `import` and CommonJS `require` against the built bundle).
 
 ## What it flags
 
 | Rule | Default | What it catches |
 |---|---|---|
 | `install-script` | error | New `preinstall` / `install` / `postinstall` scripts (or implicit `node-gyp`), or scripts that changed since the previous version |
+| `disallowed-install-script` | error | Package runs install scripts but is not listed in `allowScripts` when enforcement is on |
 | `integrity-change` | error | Same `name@version` with a different integrity hash or tarball source, or a lockfile hash that doesn't match the registry |
+| `registry-signature-invalid` | error | Registry tarball ECDSA signature does not verify (same rules as `npm audit signatures`) |
+| `unsigned-package` | warn | Registry metadata has no tarball signature while the registry publishes signing keys |
+| `provenance-lost` | error | npm provenance attestation was present on the previous version but missing on the new one |
+| `provenance-missing` | note | Resolved version has no provenance attestation (`--require-provenance` promotes to a failure) |
+| `disallowed-host` / `disallowed-scheme` / `name-url-mismatch` | error | lockfile-lint style tarball URL policy (opt-in via `lockfileLint`) |
 | `typosquat` | error | New names close to popular packages (edit distance, `-`/`_`/`.` confusion, homoglyphs like `rn`→`m`, `0`→`o`, scoped copies, `-js`/`node-` affixes) |
 | `publisher-change` | error | The new version was published by a different npm user than the previous one |
 | `recent-publish` | error | The resolved version was published less than `--min-age` ago (default 72h) |
@@ -21,7 +34,7 @@ Supported lockfiles: `package-lock.json` / `npm-shrinkwrap.json` (v1–v3), `pnp
 | `unknown-package` / `registry-error` | warn | Not in the registry, or the lookup failed |
 | `new-dependency` | note | Every newly added package (direct or transitive) |
 
-Only packages that were added or changed are looked up, so runs stay fast. `--offline` skips the registry and keeps the lockfile-only checks (integrity, typosquat, git/URL, `hasInstallScript`).
+Diff rules only query the registry for added/changed packages, so runs stay fast. When signature verification is enabled, every registry package in the lockfile is checked against `/-/npm/v1/keys`. `--offline` skips the registry and keeps lockfile-only checks (integrity, typosquat, git/URL, `hasInstallScript`, optional `lockfileLint`).
 
 ## Install
 
@@ -53,6 +66,10 @@ package-tripwire --min-age 7d --fail-on warn --sarif tripwire.sarif --json tripw
 | `--offline` | No registry lookups |
 | `--registry <url>` | Registry URL (default `https://registry.npmjs.org`) |
 | `--no-dev` | Ignore dev dependencies |
+| `--no-signatures` | Skip registry tarball signature verification |
+| `--require-provenance` | Treat missing provenance attestations as findings |
+| `--enforce-allow-scripts` | Fail when install scripts run outside `allowScripts` |
+| `--write-allow-scripts <file>` | Write the configured `allowScripts` list to a JSON policy file |
 | `--config <file>` | Config file path |
 | `--fail-on <level>` | `error` (default), `warn`, `note` or `none` |
 | `--json [file]` | JSON report to a file, or stdout |
@@ -96,9 +113,20 @@ Put the config in `.package-tripwire.json` (or `.package-tripwirerc.json`, or a 
     "esbuild@0.24.0",
     { "package": "sharp", "rules": ["install-script"], "reason": "prebuilt binaries" },
     { "package": "left-pad", "version": "1.3.0", "rules": ["recent-publish"], "expires": "2026-12-31" }
-  ]
+  ],
+  "allowScripts": ["esbuild", "sharp", "@my-org/*"],
+  "enforceAllowScripts": true,
+  "verifySignatures": true,
+  "requireProvenance": false,
+  "lockfileLint": {
+    "allowedHosts": ["registry.npmjs.org", "registry.yarnpkg.com", "npm.pkg.github.com"],
+    "allowedSchemes": ["https:"],
+    "validatePackageNames": true
+  }
 }
 ```
+
+Wire install-script enforcement in CI the same way as [@lavamoat/allow-scripts](https://www.npmjs.com/package/@lavamoat/allow-scripts): keep `allowScripts` in config, turn on `enforceAllowScripts`, and optionally commit the policy with `--write-allow-scripts .package-tripwire-allow-scripts.json`.
 
 - `rules` sets each rule's level to `error`, `warn`, `note` or `off`.
 - `allow` entries can be `name`, `name@version` or a glob like `@scope/*`, or an object with `package`, `version`, `rules`, `reason` and `expires`. An expired entry stops matching, so exceptions don't stay forever.
@@ -147,20 +175,25 @@ On a pull request it compares against `origin/<base branch>` by default. Otherwi
 
 ## Library
 
-```js
-import { run, analyze, parseAny, createRegistry, formatSarif } from 'package-tripwire';
+Works with ESM and CommonJS (Node 18+):
 
-const result = await run({ base: 'origin/main', config: { minAge: '3d' } });
+```js
+import { run, analyze, parseAny, createRegistry, formatSarif, lintLockfile, findDisallowedInstallScripts } from 'package-tripwire';
+// const { run } = require('package-tripwire');
+
+const result = await run({ base: 'origin/main', config: { minAge: '3d', enforceAllowScripts: true, allowScripts: ['esbuild'] } });
 console.log(result.findings);
 ```
 
-TypeScript types are included.
+TypeScript declarations are generated from source into `dist/` when you run `npm run build` (also run automatically before `npm test` / publish).
 
 ## Limitations
 
 - Typosquat detection is a heuristic built on a list of popular packages. Expect the occasional false positive, and allowlist it.
 - For git, URL and `file:` dependencies there is no registry metadata, so only the source is flagged.
 - Yarn Berry stores its own checksum format, so the check that compares lockfile integrity with the registry is skipped for Berry. The same-version change check still runs.
+- Signature verification depends on registry signing keys and `dist.signatures` metadata (private registries must expose the same `/-/npm/v1/keys` convention as the public npm registry).
+- `enforceAllowScripts` blocks disallowed packages at scan time; combine with your package manager's lifecycle hooks if you need install-time enforcement like LavaMoat.
 
 ## License
 
