@@ -63,7 +63,7 @@
   "bugs": {
     "url": "https://github.com/MrLouisWright/package-tripwire/issues"
   },
-  "homepage": "https://github.com/MrLouisWright/package-tripwire#readme",
+  "homepage": "https://mrlouiswright.github.io/package-tripwire/",
   "devDependencies": {
     "esbuild": "^0.25.0",
     "typescript": "^5.8.2"
